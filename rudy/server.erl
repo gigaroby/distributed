@@ -1,40 +1,46 @@
 -module(server).
--export([init/2, default_handler/1]).
+-export([start/2, stop/0, default_handler/1]).
 
 default_handler(Request) ->
+	timer:sleep(40),
 	{200, dict:store("Content-Type", "text-plain", dict:new()), "ok"}.
+
+start(Port, Handler) ->
+	register(rudy, spawn(fun() -> init(Port, Handler) end)).
+
+stop() ->
+	exit(whereis(rudy), "time to die").
 
 init(Port, Handler) ->
 	Opt = [list, {active, false}, {reuseaddr, true}],
 	case gen_tcp:listen(Port, Opt) of
 		{ok, Listen} ->
-			case process_request(Listen, Handler) of
-				{error, Cause} ->
-					io:format("rudy error: ~w~n", [Cause]);
-				_ -> 1
-			end,
-			gen_tcp:close(Listen);
-		{error, Error} ->
-			{error, Error}
+			try listen_and_spawn(Listen, Handler) of
+				{error, Cause} -> exit(Cause)
+			after
+				gen_tcp:close(Listen)
+			end;
+		{error, Cause} -> exit(Cause)
 	end.
 
-process_request(Listen, Handler) ->
+listen_and_spawn(Listen, Handler) ->
 	case gen_tcp:accept(Listen) of
 		{ok, Client} ->
-			apply_handler(Client, Handler),
-			gen_tcp:close(Client),
-			process_request(Listen, Handler);
-		{error, Error} ->
-			{error, Error}
+			Pid = spawn(fun() -> apply_handler(Client, Handler) end),
+			gen_tcp:controlling_process(Client, Pid),
+			listen_and_spawn(Listen, Handler);
+		Err = {error, _} ->
+			Err
 	end.
 
 
 apply_handler(Client, Handler) ->
-	case http:read_request(Client) of
+	try http:read_request(Client) of
 		{ok, Request} ->
 			Response = Handler(Request),
 			http:write_response(Client, Request, Response);
-		{error, Reason} ->
-			{error, Reason}
+		{error, Cause} -> 
+			exit(Cause)
+	after
+		gen_tcp:close(Client)
 	end.
-

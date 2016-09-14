@@ -3,7 +3,7 @@
 
 run(Host, Port) ->
 	Start = erlang:system_time(micro_seconds),
-	execute(100, Host, Port),
+	execute(10000, Host, Port),
 	Finish = erlang:system_time(micro_seconds),
 	Finish - Start.
 
