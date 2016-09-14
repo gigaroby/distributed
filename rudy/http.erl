@@ -110,8 +110,23 @@ read_until_body(_, [?CR, ?LF, ?CR, ?LF | Rest], Accumulator) ->
 read_until_body(Client, [B | Rest], Accumulator) ->
 	read_until_body(Client, Rest, [B | Accumulator]).
 
-read_body(_, _, Rest) ->
-	{ok, Rest}.
+read_body(Client, {_, _, _, Headers}, Buf) ->
+	case dict:find("content-length", Headers) of
+		error -> {ok, []};
+		{ok, Value} ->
+			{ContentLength, _} = string:to_integer(Value),
+			Remaining = ContentLength - length(Buf),
+			case Remaining of
+				0 -> {ok, Buf};
+				_ -> 
+					case gen_tcp:recv(Client, Remaining) of
+						{ok, Rest} ->
+							{ok, Buf ++ Rest};
+						Err = {error, _} ->
+							Err
+					end
+			end
+	end.
 
 % -----------------------------------------------------------------------
 %							HTTP PARSER
@@ -144,7 +159,7 @@ parse_rest([Header | Rest], Headers) ->
 
 split_header(HeaderLine) ->
 	{Key, Value} = lists:splitwith(fun(C) -> C =/= $: end, HeaderLine),
-	{Key, string:strip(string:substr(Value, 2), both, ?SPACE)}.
+	{string:to_lower(Key), string:strip(string:substr(Value, 2), both, ?SPACE)}.
 
 
 split_crlf(Content) ->
