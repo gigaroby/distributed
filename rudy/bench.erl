@@ -3,7 +3,7 @@
 
 run(Host, Port) ->
 	Start = erlang:system_time(micro_seconds),
-	execute(10000, Host, Port),
+	execute(100, Host, Port),
 	Finish = erlang:system_time(micro_seconds),
 	Finish - Start.
 
@@ -19,7 +19,7 @@ execute(N, Host, Port) ->
 request(Host, Port) ->
 	Opt = [list, {active, false}, {reuseaddr, true}],
 	{ok, Server} = gen_tcp:connect(Host, Port, Opt),
-	gen_tcp:send(Server, "GET / HTTP/1.1\r\nContent-Length: 10\r\n\r\n11111111111\r\n"),
+	gen_tcp:send(Server, "GET / HTTP/1.1\r\n\r\n"),
 	Recv = gen_tcp:recv(Server, 0),
 	case Recv of
 		{ok, _} ->
