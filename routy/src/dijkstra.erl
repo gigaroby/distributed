@@ -1,5 +1,5 @@
 -module(dijkstra).
--export([entry/2, replace/4, update/4, iterate/3, table/2]).
+-export([entry/2, replace/4, update/4, iterate/3, table/2, route/2]).
 
 entry(_, []) ->
 	0;
@@ -42,6 +42,7 @@ iterate([{Node, N, Gw} | Rest], Map, Table) ->
 					map:reachable(Node, Map)),
 	iterate(NewSorted, Map, NewTable).
 
+
 contains(_, []) -> false;
 contains(Elem, [Current | _]) when Current =:= Elem -> true;
 contains(Elem, [_ | Rest]) -> contains(Elem, Rest).
@@ -50,3 +51,8 @@ table(Gateways, Map) ->
 	GwTable = [{X, 0, X} || X <- Gateways],
 	TempTable = [{X, inf, unknown} || X <- map:all_nodes(Map), not contains(X, Gateways)],
 	iterate(GwTable ++ TempTable, Map, []).
+
+
+route(_, []) -> {error, notfound};
+route(Node, [{N, M} | _]) when Node =:= N -> {ok, M};
+route(Node, [_ | Rest]) -> route(Node, Rest).
