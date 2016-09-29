@@ -1,20 +1,6 @@
 -module(test).
--export([run/2]).
+-export([run/3]).
 % report on your initial observation
-
-run(Sleeps, Jitters) ->
-	io:format("sleep;jitter;correct;out of order~n"),
-	runb(Sleeps, Jitters).
-
-runb([], _) -> ok;
-runb(_, []) -> ok;
-runb([S | Sleeps], [J | Jitters]) ->
-	run(5000, S, J),
-	receive
-		{data, Correct, OOO} ->
-			io:format("~w;~w;~w;~w~n", [S, J, Correct, OOO])
-	end,
-	runb(Sleeps, Jitters).
 
 run(For, Sleep, Jitter) ->
     Log = logger:start([john, paul, ringo, george]),

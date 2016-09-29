@@ -13,9 +13,10 @@ stop(Worker) ->
 
 init(Name, Log, Seed, Sleep, Jitter) ->
 	rand:seed(exs1024, {Seed, Seed, Seed}),
+	Clock = time:zero(),
 	receive
 		{peers, Peers} ->
-			loop(Name, Log, Peers, Sleep, Jitter);
+			loop(Name, Log, Peers, Clock, Sleep, Jitter);
 		stop ->
 			ok
 	end.
@@ -23,24 +24,25 @@ init(Name, Log, Seed, Sleep, Jitter) ->
 peers(Wrk, Peers) ->
 	Wrk ! {peers, Peers}.
 
-loop(Name, Log, Peers, Sleep, Jitter)->
+loop(Name, Log, Peers, Clock, Sleep, Jitter)->
 	Wait = rand:uniform(Sleep),
 	receive
 		{msg, Time, Msg} ->
-			Log ! {log, Name, Time, {received, Msg}},
-			loop(Name, Log, Peers, Sleep, Jitter);
+			Merged = time:merge(Time, Clock),
+			Log ! {log, Name, Merged, {received, Msg}},
+			loop(Name, Log, Peers, Merged, Sleep, Jitter);
 		stop ->
 			ok;
 		Error ->
 			Log ! {log, Name, time, {error, Error}}
 	after Wait ->
 			  Selected = select(Peers),
-			  Time = na,
-			  Message = {hello, rand:uniform(1000)},
+			  Time = time:inc(Name, Clock),
+			  Message = {hello, rand:uniform(100)},
 			  Selected ! {msg, Time, Message},
 			  jitter(Jitter),
 			  Log ! {log, Name, Time, {sending, Message}},
-			  loop(Name, Log, Peers, Sleep, Jitter)
+			  loop(Name, Log, Peers, Time, Sleep, Jitter)
 	end.
 
 select(Peers) ->

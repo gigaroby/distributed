@@ -5,42 +5,28 @@ start(Nodes) ->
 	spawn_link(fun() -> init(Nodes) end).
 
 stop(Logger) ->
-	Logger ! {stop, self()}.
+	Logger ! stop.
 
-init(_) ->
-	loop(0, 0, dict:new()).
+init(Nodes) ->
+	loop([], time:clock(Nodes)).
 
 
-loop(Correct, OOO, OutOfOrder) ->
+safe_to_print(Holdback, Clock) ->
+	Sorted = lists:sort(fun({_, T1, _}, {_, T2, _}) -> time:leq(T1, T2) end, Holdback),
+	lists:partition(fun({_, Time, _}) -> time:safe(Time, Clock) end, Sorted).
+
+
+loop(Holdback, Clock) ->
 	receive
 		{log, From, Time, Msg} ->
-			case detect_ooo(Msg, OutOfOrder) of
-				{ok, NewOutOfOrder} ->
-					log(From, Time, Msg),
-					loop(Correct + 1, OOO, NewOutOfOrder);
-				{outoforder, NewOutOfOrder, _} ->
-					log(From, Time, Msg),
-					loop(Correct, OOO + 1, NewOutOfOrder);
-				{newentry, NewOutOfOrder} ->
-					loop(Correct, OOO, NewOutOfOrder)
-			end;
-		{stop, From} ->
-			From ! {data, Correct, OOO},
+			NewClock = time:update(From, Time, Clock),
+			{Safe, NewHoldback} = safe_to_print([{From, Time, Msg} | Holdback], NewClock),
+			[log(F, T, M) || {F, T, M} <- Safe],
+			loop(NewHoldback, NewClock);
+		stop ->
 			ok
 	end.
 
-detect_ooo({Mode, Msg}, OutOfOrder) ->
-	case dict:find(Msg, OutOfOrder) of
-		error ->
-			{newentry, dict:store(Msg, Mode, OutOfOrder)};
-		{ok, received} when Mode =:= sending ->
-			{outoforder, dict:erase(Msg, OutOfOrder), Msg};
-		{ok, sending} when Mode =:= received ->
-			{ok, dict:erase(Msg, OutOfOrder)}
-	end.
-
-
-
 log(From, Time, Msg) ->
+	io:format("log: ~w ~w ~p~n", [Time, From, Msg]),
 	ok.
-	% io:format("log: ~w ~w ~p~n", [Time, From, Msg]).
