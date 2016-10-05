@@ -1,10 +1,20 @@
--module(gms1).
+-module(gms2).
 
 -export([start/1, start/2]).
 
-bcast(_Id, Msg, Pids) ->
-	[P ! Msg || P <- Pids],
-	ok.
+-define(ARGH, 1000).
+
+bcast(Id, Msg, Nodes) ->
+	lists:foreach(fun(Node) -> Node ! Msg, crash(Id) end, Nodes).
+
+crash(Id) ->
+	case rand:uniform(?ARGH) of
+		?ARGH ->
+			io:format("~w: leader crash~n", [Id]),
+			exit(no_luck);
+		_ ->
+			ok
+	end.
 
 start(Id) ->
 	Self = self(),
@@ -25,8 +35,12 @@ init(Id, Grp, Master) ->
 	Grp ! {join, Master, Self},
 	receive
 		{view, [Leader|Slaves], Group} ->
+			erlang:monitor(process, Leader),
 			Master ! {view, Group},
 			slave(Id, Master, Leader, Slaves, Group)
+	after 5000 ->
+		% wait 5 seconds for the master to reply, otherwise quit
+		Master ! {error, "no reply from leader"}
 	end.
 
 
@@ -67,7 +81,27 @@ slave(Id, Master, Leader, Slaves, Group) ->
 			Master ! {view, Group2},
 			slave(Id, Master, Leader, Slaves2, Group2);
 
+		{view, [Other | _], _} ->
+			io:format("~w: got a view with unknown leader ~w, discarding message~n", [Id, Other]),
+			slave(Id, Master, Leader, Slaves, Group);
+
+
+		{'DOWN', _Ref, process, Leader, _Reason} ->
+			election(Id, Master, Slaves, Group);
+
 		stop ->
 			ok
 	end.
 
+election(Id, Master, Slaves, [_ | Group]) ->
+	Self = self(),
+	case Slaves of
+		[Self | Rest] ->
+			bcast(Id, {view, Slaves, Group}, Rest),
+			Master ! {view, Group},
+			io:format("~w: leader stepping up~n", [Id]),
+			leader(Id, Master, Rest, Group);
+		[Leader | Rest] ->
+			erlang:monitor(process, Leader),
+			slave(Id, Master, Leader, Rest, Group)
+	end.
