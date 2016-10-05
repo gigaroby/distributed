@@ -74,12 +74,13 @@ slave(Id, Master, Leader, Slaves, Group, LastMessage, MessageID) ->
 			Leader ! {join, Wrk, Peer},
 			slave(Id, Master, Leader, Slaves, Group, LastMessage, MessageID);
 
-		{msg, MID, _} when MID =< MessageID ->
-			slave(Id, Master, Leader, Slaves, Group, LastMessage, MessageID);
 
-		NextMessage = {msg, NextMessageID, Msg} ->
+		NextMessage = {msg, NextMessageID, Msg} when NextMessageID > MessageID ->
 			Master ! Msg,
 			slave(Id, Master, Leader, Slaves, Group, NextMessage, NextMessageID);
+
+		{msg, _, _} ->
+			slave(Id, Master, Leader, Slaves, Group, LastMessage, MessageID);
 
 		NextMessage = {view, NextMessageID, [Leader|Slaves2], Group2} when NextMessageID > MessageID ->
 			Master ! {view, Group2},
